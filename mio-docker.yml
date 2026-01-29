@@ -1,0 +1,75 @@
+---
+- name: Il mio primo Deploy su Docker Locale
+  hosts: localhost
+  connection: local
+  become: true #usa i permessi root per gestire Docker
+  gather_facts: no #velocizza l'esecuzione
+
+  #definisco le variabili
+  vars:
+    #definisco una sola volta la politica di riavvio
+    policy_standard: always
+    base_folder: /home/ale
+
+  tasks:
+    #controllare se il servizio stia girando
+    - name: assicurarsi che Docker sia attivo
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+  #creazione pagina web
+    - name: creazione pagina web index.html
+      copy:
+        dest: /home/ale/index.html
+        content: |
+          <h1>Ciao Ale!!<h1>
+          <p>Questo sito è stato deployato con Ansible.<p>
+          <p>Tutto funziona<\p>
+
+  #scaricare l'immagine Nginx
+    - name: scarica Nginx
+      docker_image:
+        name: nginx
+        tag: latest
+        source: pull
+
+  #creazione interfaccia grafica
+    - name: deploy di Portainer
+      docker_container:
+        name: dashboard-grafica
+        image: portainer/portainer-ce:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "9000:9000"
+        volumes:
+          - "/var/run/docker.sock:/var/run/docker.sock"
+
+  #creazione Uptime Kuma che serve al monitoraggio
+    - name: deploy di Uptime Kuma
+      docker_container: 
+        name: monitoraggio
+        image: louislam/uptime-kuma:1
+        state: started
+        restart_policy: always
+        ports:
+          - "3001:3001"
+        volumes:
+          - "/home/ale/kuma-data:/app/data"
+  #creare e avviare il container
+    - name: lanciare container del sito web
+      docker_container:
+        name: sito-di-ale
+        image: nginx
+        state: started
+        restart_policy: always
+        ports:
+          - "8080:80" #mappare la porta 8080 di debian sulla porta 80 del container
+        
+        #collegamento file debian dentro il container
+        volumes:
+          - "/home/ale/index.html:/usr/share/nginx/html/index.html"
+
+

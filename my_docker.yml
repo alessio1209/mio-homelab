@@ -1,0 +1,131 @@
+---
+- name: Il mio primo Deploy su Docker Locale
+  hosts: localhost
+  connection: local
+  become: true #usa i permessi root per gestire Docker
+  gather_facts: no #velocizza l'esecuzione
+
+  #definisco le variabili
+  vars:
+    #definisco una sola volta la politica di riavvio
+    policy_standard: always
+    base_folder: /home/ale
+
+  tasks:
+  #installazione di git
+    - name: installazione git (git, curl, ecc)
+      apt:
+        name:
+          - git
+          - curl
+          - unzip
+        state: present
+        update_cache: yes
+
+    #controllare se il servizio stia girando
+    - name: assicurarsi che Docker sia attivo
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+  #creazione pagina web
+    - name: creazione pagina web index.html
+      copy:
+        dest: /home/ale/index.html
+        content: |
+          <h1>Ciao Ale!!<h1>
+          <p>Questo sito è stato deployato con Ansible.<p>
+          <p>Tutto funziona<\p>
+
+  #Sito web
+    - name: deploy sito web
+      docker_container:
+        name: sito-di-ale
+        image: nginx:latest
+        state: started
+        restart_policy:
+          "{{ policy_standard }}"
+        ports:
+          - "8080:80" #mappare la porta 8080 di debian sulla porta 80 del container
+        volumes:
+          - "{{ base_folder }}/sito:/usr/share/nginx/html"
+
+  #creazione interfaccia grafica
+    - name: deploy di Portainer
+      docker_container:
+        name: dashboard-grafica
+        image: portainer/portainer-ce:latest
+        state: started
+        restart_policy: 
+          "{{ policy_standard }}"
+        ports:
+          - "9000:9000"
+        volumes:
+          - "/var/run/docker.sock:/var/run/docker.sock"
+
+  #creazione Uptime Kuma che serve al monitoraggio
+    - name: deploy di Uptime Kuma
+      docker_container: 
+        name: monitoraggio
+        image: louislam/uptime-kuma:1
+        state: started
+        restart_policy: 
+          "{{ policy_standard }}"
+        ports:
+          - "3001:3001"
+        volumes:
+          - "{{ base_folder }}/kuma-data:/app/data"
+
+  #creazione homepage
+    - name: deploy Heimdall dashboard
+      docker_container:
+        name: homepage-lab
+        image: linuxserver/heimdall:latest
+        state: started
+        restart_policy:
+          "{{ policy_standard }}"
+        ports:
+          - "80:80" ##userà la porta standard del web
+          - "443:443" #utile se il sito passa in https
+        env: #environment, serve a passare delle informazioni al programma prima che il container parta
+          PUID: "1000" #process user iD, ID mio user
+          PGID: "1000" #process group ID, ID del gruppo
+          TZ: "Europe/Rome" #time zone, fuso orario
+        volumes:
+          - "{{ base_folder }}/heimdall-config:/config"
+
+  #preparazione file browser
+    - name: creazione file databse per file browser
+      file:
+        path: "{{ base_folder }}/filebrowser.db"
+        state: touch
+        mode: '0666'
+
+  #creazione file browser
+    - name: deploy file browser
+      docker_container: 
+        name: gestione-file
+        image: filebrowser/filebrowser:latest
+        state: started
+        restart_policy:
+          "{{ policy_standard }}"
+        ports: 
+          - "8081:80" 
+        volumes: 
+          - "{{ base_folder }}:/srv" #visualizza tutta la mia home
+          - "{{ base_folder }}/filebrowser.db:/database/.db" #salva le impostazioni qui
+
+  #creazione backup automatico
+    - name: creazione cartella per i backup
+      file:
+        path: "{{ base_folder }}/backup_archivio"
+        state: directory
+        mode: '0755'
+
+    - name: pianificazione backup
+      cron: 
+        name: "backup completo"
+        minute: "0"
+        hour: "3"
+        job: "tar -czf {{ base_folder }}/backup_archivio/backup_$(date +\\%Y\\%m\\%d).tar.gz {{ base_folder }}/sito {{ base_folder }}/heidmall-config {{ base_folder }}/kuma-data"
