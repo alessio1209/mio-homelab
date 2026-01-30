@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-mysql #indirizzo DNS interno. diventa il nome host e collegherà wordpress direttamente al database scrivendo wordpress-mysql invece di un IP numerico
+  labels:
+    app: wordpress
+spec:
+  ports:
+    - port: 3306 #porta standard di mysql
+  selector: #dice al servizio di mandare il traffico solo ai Pod con quest'etichetta (tier:mysql)
+    app: wordpress
+    tier: mysql
+  clusterIP: None #crea un headless service. Impostato su none, kubernetes ci dà direttamente l'indirizzo del container e quindi parlerà con l'IP del Pod
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress-mysql
+  labels:
+    app: wordpress
+    tier: mysql
+spec:
+  selector:
+    matchLabels:
+      app: wordpress
+      tier: mysql
+  strategy: 
+    type: Recreate #i deployemnt solitamente usano rollingUpdate (accendono il nuovo e poi spengono il vecchio). In questo caso usiamo recreate perchè abbiamo un disco fisico (volume). Due container non possono avere lo stesso disco in scrittura contemporaneamente e quidni kubernetes deve prima ucciedere il databse vecchio, rilasciare il disco e poi creare quello nuovo. Ci sarà un attimo di downtime ma è più sicuro per i dati
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: mysql
+    spec:
+      containers:
+      - image: mysql:5.7 #versione stabile per wordpress
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef: #indichiamo dove cercare l'oggetto secret chiamato mysql-pass, prendi il valore della chiave password e usalo come variabile d'ambiente MYSQL_ROOT_PASSOWRD
+              name: mysql-pass #nome del secret creato nel file mysql.yaml
+              key: password #chiave dentro il secret
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts: #tutto ciò che MySql scriverà nella cartella /var/lib/mysql verrà in realtà scritto sul disco persistente esterno
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql #dove MySql salva i dati dentro il container
+      volumes: 
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim #richiesta al cluster di dare spazio
+metadata:
+  name: mysql-pv-claim
+spec:
+  accessModes: #modo di accesso al disco
+    - ReadWriteOnce #il disco in lettura e scrittura può essere montato da un solo nodo alla volta
+  resources:
+    requests:
+      storage: 1Gi #stiamo chiedendo 1gb di spazio

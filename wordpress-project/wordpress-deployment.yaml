@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service #è il servizio che permette di raggiumgere il sito
+metadata:
+  name: wordpress #nome interno del servizio
+  labels:
+    app: wordpress
+spec:
+  ports:
+    - port: 80 #porta interna del cluster
+      targetPort: 80 #porta del conteiner
+      nodePort: 30081 #porta del browser
+  selector: #è come un filtro che manda il traffico (in questo caso sulla porta 30081) ai Pod con l'etichetta wordpress e frontend
+    app: wordpress
+    tier: frontend 
+  type: NodePort # apre la porta sull'IP della virtual machine
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  labels:
+    app: wordpress
+    tier: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: frontend
+    spec:
+      containers:
+      - image: wordpress:latest
+        name: wordpress
+        env: #questa sezione serve a configurare wordpress appena si accende
+        - name: WORDPRESS_DB_HOST
+          value: wordpress-mysql #questo valore dice a wordpress dove trovare il database, in questo caso gli diamo lo stesso nome che abbiamo assegnato prima nel file wordpress-mysql. Kubernetes risolve questo nome nell'indirizzo IP giusto
+        - name: WORDPRESS_DB_USER
+          value: admin
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom: #anche il frontend ha bisogno di sapere la password per entrare nel database 
+            secretKeyRef:
+              name: mysql-pass
+              key: password
+        ports:
+        - containerPort: 80
+          name: wordpress
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html #qui è situato tutto il codice del sito. Monteremo un disoc esterno su questa cartella per non perdere i dati se il Pod si riavvia
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: wp-pv-claim
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim #diciamoal cluster che abbiamo bisogno di altro spazio
+metadata:
+  name: wp-pv-claim #questo nome verrà usato dal Deployment, nella sezione volumes, per agganciare il disco
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
