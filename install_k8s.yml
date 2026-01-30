@@ -1,0 +1,32 @@
+---
+- name: deploy Kubernetes (k3s)
+  hosts: localhost
+  connection: local
+  become: true
+
+  tasks:
+    - name: Scarica e installa K3s
+      shell: curl -sfL https://get.k3s.io | sh -
+      args: 
+        creates: /usr/local/bin/k3s
+
+    - name: aspetta che il nodo sia pronto
+      wait_for:
+        path: /etc/rancher/k3s/k3s.yaml
+        state: present
+        timeout: 30
+
+    - name: controlla che il servizio sia attivo
+      service:
+        name: k3s
+        state: started
+        enabled: yes
+
+    - name: copia la configurazione per l'utente (per usare kubectl senza sudo)
+      shell: |
+        mkdir -p /home/{{ ansible_user_id }}/.kube
+        cp /etc/rancher/k3s/k3s.yaml /home/{{ ansible_user_id }}/.kube/config
+        chown {{ ansible_user_id }}:{{ ansible_user_id }} /home/{{ ansible_user_id}}/.kube/config
+        chmod 600 /home/{{ ansible_user_id }}/.kube/config
+      args: 
+        creates: /home/{{ ansible_user_id }}/.kube/config

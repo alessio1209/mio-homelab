@@ -1,0 +1,43 @@
+apiVersion: apps/v1 #versione delle API di k8s
+kind: Deployment #tipo di oggetto: gestore di repliche
+metadata:
+  name: sito-indistruttibile #nome che ho dato per gestire i pod (i pod contengono al loro interno i container)
+spec:
+  replicas: 2 #crea due copie identiche
+  selector: #serve al deployment per riconoscere i suoi "figli"
+    matchLabels: #etichetta
+      app: nginx #nome etichetta
+  template: #serve a creare i singoli conteiner 
+    metadata: #attacca un'etichetta virtuale sul conteiner, fondamentale perchè selector lo cercherà con quest'etichetta
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80 #il conteiner ascolta su questa porta
+        volumeMounts: #dice dove montare
+        - name: html-volume
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html-volume
+        configMap:
+          name: mia-pagina-web
+---
+apiVersion: v1
+kind: Service #tipo di oggetto: punto di accesso di rete
+metadata:
+  name: servizio-sito #nome del servizio
+spec:
+  type: NodePort #serve ad aprire una porta fisica sull'indirizzo IP della macchina virtuale (il nodo) per entrare dall'esterno
+  selector: #il collegamento, cerca tutti i pod che hanno l'etichetta nginx. In questo modo i due pezzi si parlano
+    app: nginx
+  ports:
+    - port: 80 #porta virtuale del servizio
+      targetPort: 80 #porta del container dove gira nginx (definita sopra)
+      nodePort: 30080 #porta reale che uso sul browser (http://localhost:30080. Il servizio riceve la richesta e la gira sulla porta 80 di uno dei due container
+
+
+
+
