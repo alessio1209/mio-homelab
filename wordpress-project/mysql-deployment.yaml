@@ -10,7 +10,7 @@ spec:
   selector: #dice al servizio di mandare il traffico solo ai Pod con quest'etichetta (tier:mysql)
     app: wordpress
     tier: mysql
-  clusterIP: None #crea un headless service. Impostato su none, kubernetes ci dà direttamente l'indirizzo del container e quindi parlerà con l'IP del Pod
+  clusterIP: None #crea un headless service. Impostato su none, assegna un indirizzo IP raggiungibile solo dall'interno del cluster. Solo gli altri pod possono comunicare, dall'esterno non è raggiungibile
 
 ---
 

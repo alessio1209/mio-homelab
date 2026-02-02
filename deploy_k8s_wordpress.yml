@@ -1,0 +1,56 @@
+---
+
+- name: Deploy WordPress Stack su Kubernetes
+  hosts: localhost #dice ad ansible dove eseguire i comandi
+  connection: local #specifica ad ansible il metodo di connessione. Solitamente utilizza ssh, ma essendo in localhost esegue i comandi direttamente dal terminale locale
+  gather_facts: no #di solito ansible raccoglie info sul PC (IP, OS, CPU ecc), in questo caso non ci servono
+  vars: #lista variabli
+    db_password: "wordpress" 
+    project_dir: "{{ playbook_dir }}/wordpress-project" #"playbook_dir" è una variabile di ansible che gli inidica dove si trova il file .yaml
+
+  tasks:
+    - name: Assicura che la libreria di python per k8s sia installata
+      become: yes #diventa root
+      apt:
+        name: python3-kubernetes
+        state: present
+
+#creazione del file secret senza usare yaml esterni
+    - name: Crea il secret per MySql
+      kubernetes.core.k8s: #è un modulo per pilotare kubernetes (kubectl)
+        state: present
+        definition: #invece di leggere un file esterno, leggerà direttamente qui
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: mysql-pass
+            namespace: default
+          type: Opaque
+          stringData: #kubernetes si occpuperà di convertire automaticamente in Base64
+            password: "{{ db_password }}" #prende il valore "wordpress" dalla variabile definita sopra
+
+#deploy del database
+    - name: Applicazione di MySql Deployment e Service
+      kubernetes.core.k8s:
+        state: present
+        namespace: default
+        src: "{{ project_dir }}/mysql-deployment.yaml"
+
+#deploy del frontend
+    - name: Applicaione di WordPress Deployment e Service
+      kubernetes.core.k8s:
+        state: present
+        namespace: default
+        src: "{{ project_dir }}/wordpress-deployment.yaml" #userà il percorso completo 
+
+#controllo finale per un buon funzionamento
+    - name: Attendiamo che i Pod siano pronti
+      kubernetes.core.k8s_info:
+        kind: Pod #chiediamo info sui Pod
+        namespace: default
+        label_selectors:
+          - app = wordpress #filtriamo solo i Pod con quest'etichetta (sia MySql che Frontend hanno quest'etichetta)
+      register: pod_list #salviamo il risultato di questa interrogazione in questa variabile temporanea chiamata pod_list
+      until: pod_list.resources is defined and pod_list.resources | length > 0 and (pod_list.resources | selectattr('status.phase', 'equalto', 'Running') | list | length) >= 2
+      retries: 10
+      delay: 10 #aspetta 10 secondi tra un tentativo e l'altro (attesa massima: 100 secondi)

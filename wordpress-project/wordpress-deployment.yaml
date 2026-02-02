@@ -7,7 +7,7 @@ metadata:
 spec:
   ports:
     - port: 80 #porta interna del cluster
-      targetPort: 80 #porta del conteiner
+      targetPort: 80 #porta del container
       nodePort: 30081 #porta del browser
   selector: #è come un filtro che manda il traffico (in questo caso sulla porta 30081) ai Pod con l'etichetta wordpress e frontend
     app: wordpress
@@ -62,7 +62,7 @@ spec:
 ---
 
 apiVersion: v1
-kind: PersistentVolumeClaim #diciamoal cluster che abbiamo bisogno di altro spazio
+kind: PersistentVolumeClaim #diciamo al cluster che abbiamo bisogno di altro spazio
 metadata:
   name: wp-pv-claim #questo nome verrà usato dal Deployment, nella sezione volumes, per agganciare il disco
 spec:

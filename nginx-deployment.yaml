@@ -8,7 +8,7 @@ spec:
     matchLabels: #etichetta
       app: nginx #nome etichetta
   template: #serve a creare i singoli conteiner 
-    metadata: #attacca un'etichetta virtuale sul conteiner, fondamentale perchè selector lo cercherà con quest'etichetta
+    metadata: #attacca un'etichetta virtuale sul container, fondamentale perchè selector lo cercherà con quest'etichetta
       labels:
         app: nginx
     spec:
