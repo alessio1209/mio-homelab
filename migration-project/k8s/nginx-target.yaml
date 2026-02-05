@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: PersistentVolumeClaim #chiede a kubernetes di dare un pezo sul disco
+metadata:
+  name: migration-pvc #nome prenotazione. useremo questo nome per collegarlo al Pod
+  namespace: default
+spec:
+  accessModes: #accesso al disco
+    - ReadWriteOnce #in questo caso il disco può essere letto e scritto da un solo nodo alla volta
+  resources:
+    requests:
+      storage: 1Gi #spazio richiesto
+
+---
+apiVersion: apps/v1
+kind: Deployment #definisce un app che deve sempre stare accesa
+metadata:
+  name: nginx-target
+  namespace: default
+spec:
+  replicas: 1
+  selector: #crea l'etichetta e serve a Kubernetes per capire quali pod appartengono a questo Deployment. Cercherà quelli con l'etichetta "nginx-target"
+    matchLabels: 
+      app: nginx-target
+  template: #qui descriviamo il container
+    metadata:
+      labels:
+        app: nginx-target
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts: 
+        - name: site-data
+          mountPath: /usr/share/nginx/html #questa è la cartella dove nginx cerca i file .html. Noi la sovrascriviamo con il nostro volume. Quindi, tutto quello che copieremo nel volume apparirà sul sito web
+      volumes: #colleghiamo il pvc (creato prima) al container
+      - name: site-data
+        persistentVolumeClaim:
+          claimName: migration-pvc #useremo esattamente il disco che abbiamo prenotato prima
+
+---
+apiVersion: v1
+kind: Service #crea un indirizzo di rete stabile
+metadata:
+  name: nginx-service
+  namespace: default
+spec:
+  type: NodePort #apre una porta specifica sull'IP della mia VM, così possiamo vederlo dal browser
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30090 #useremo la porta 30090 quindi il sito sarà visibile su "Http://localhost:30090"
+  selector:
+    app: nginx-target

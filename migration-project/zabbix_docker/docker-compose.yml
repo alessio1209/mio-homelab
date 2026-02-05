@@ -1,0 +1,54 @@
+
+services: #inizio lista di container
+  #il database 
+  zabbix-db: #nome logico del servizio all'inerno di docker. Gli altri container useranno questo nome per trovarlo
+    image: mariadb:10.11 #versione del db da scaricare
+    container_name: zabbix-db #è il nome che vedremo quando lanciamo il comando "docker ps"
+    restart: always #se crasha o si riavvia il pc, docker proverà a riaccenderlo subito
+    environment: #definizione variabile d'ambiente (le configurazioni) per MySql
+      - MYSQL_DATABASE=zabbix #crea un database vuoto chiamato "zabbix"
+      - MYSQL_USER=zabbix #crea un utente specifico per non usare root
+      - MYSQL_PASSWORD=zabbix_pwd #la password per l'utente zabbix
+      - MYSQL_ROOT_PASSWORD=root_pwd #la password per l'amministratore root del db
+    volumes: #per il salvataggio dei dati
+      - ./zabbix_db_data:/var/lib/mysql #.7zabbix_db_data= crea il ponte. tutto quello che il container scrive nella cartella interna /var/lib/mysql viene copiato in tempo reale nella cartella ./zabbix_db_data sul pc
+
+  #il server
+  zabbix-server: #nome del servizio
+    image: zabbix/zabbix-server-mysql:alpine-latest #l'immagine ufficiale. "alpine" è basata su Alpine Linux, versione leggera
+    container_name: zabbix-server #nome container
+    restart: always
+    ports: #mappa le porte di rete
+      - "10051:10051" #porta usata dagli agenti (i software installati sui server da monitorare) per inviare dati. la apriamo verso l'esterno
+    environment: #configurazione zabbix per connettersi al db
+      - DB_SERVER_HOST=zabbix-db #qui gli diciamo che il database si trova all'indirizzo "zabbix-db". Docker lo collegherà al container creato sopra
+      - MYSQL_DATABASE=zabbix 
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=zabbix_pwd
+    depends_on: ["zabbix-db"] #in questo modo non avvia il server se il database non è ancora partito
+
+  #password web 
+  zabbix-web: #nome servizio
+    image: zabbix/zabbix-web-nginx-mysql:alpine-latest
+    container_name: zabbix-web
+    restart: always
+    ports:
+      - "8082:8080" #mappiamo la porta 8082 del nostro pc e la colleghiamo alla 8080 del container
+    environment:
+      - ZBX_SERVER_HOST=zabbix-server #dice al sito dove trovare il server
+      - DB_SERVER_HOST=zabbix-db #dice al sito dove trovare i dati
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=zabbix_pwd
+    depends_on: ["zabbix-server"] #il sito web parte solo dopo che il server è attivo
+
+  #agent
+  zabbix-agent: #nome servizio
+    image: zabbix/zabbix-agent:alpine-latest
+    container_name: zabbix-agent
+    restart: always
+    ports:
+      - "10050:10050" #struttura (porta_pc:porta_container). Mappandola permettiamo al nostro pc o ad altri pc nella rete di interrogare l'agente
+    environment: #variabili di configurazione. L'agente è un programma passivo che aspetta "ordini". Con questa variabile che abbiamo impostato gli stiamo dicendo di prendere "ordini" solo da zabbix-server. Docker si occuperà di risolvere il nome zabbix-server nell'indirizzo IP del container server
+      - ZBX_SERVER_HOST=zabbix-server
+    depends_on: ["zabbix-server"]

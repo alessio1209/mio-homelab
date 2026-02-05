@@ -1,2 +1,4 @@
 pssw_filedatabase
 *secret.yaml
+**/zabbix_db_data/
+**/mysql_data/

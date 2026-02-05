@@ -1,0 +1,46 @@
+---
+- name: Migrazione Sito Web su Kubernetes
+  hosts: localhost #dice ad ansible di non collegarsi a server remoti e di eseguire questo script direttamente sul comptuer dove si trova, in questo caso il mio pc
+  connection: local #usa i comandi locali
+  gather_facts: no #non cerca info sul sistema (IP, memoria, OS)
+  vars: #difiniamo i percorsi sorgente e destinazione
+    local_source: "../sito_vecchio/" #percorso dove prendiamo i file
+    pod_dest: "/usr/share/nginx/html/" #questa è la cartella interna al container Nginx dove vanno i file
+
+  tasks:
+    #trovare il bersaglio
+    - name: Ottieni il nome del Pod Nginx
+      kubernetes.core.k8s_info: #modulo ansible che interroga kubernetes
+        kind: Pod #tipo di servizio 
+        namespace: default
+        label_selectors: #filtro che in questo caso equivale a dare solo i Pod con l'etichetta nginx-target
+          - app = nginx-target
+        field_selectors: #tra quelli trovati dammi solo quelli "running"
+          - status.phase=Running
+      register: pod_info #salviamo tutte le risposte di kubernetes in una variabile chiamata "pod_info". All'interno ci sarà una scheda tecnica completa dei Pod
+
+    #controllo di sicurezza
+    - name: Fallisci se il Pod non esiste o non è pronto
+      fail: #è un modulo che serve a fermare tutto e dare errori se qualcosa non va
+        msg: "Nessun Pod Nginx attivo trovato! Controlla con 'Kubectl get pods'." 
+      when: pod_info.resources | length == 0 #when è la condizione (if). pod_info.resources è la lista dei Pod trovati nel task precedente e length == 0 se la lista è uguale a 0 attiva il fail
+
+    #salva il nome in una variabile
+    - name: Imposta il nome del Pod 
+      set_fact: #crea una nuova variabile semplice chiamata "pod_name"
+        pod_name: "{{ pod_info.resources[0].metadata.name }}" #stampa il valore della variabile. pod_info.resources prende il primo Pod della lista che trova, mentre metadata.name dice di leggere solo il campo name. Come risultato potrebbe contenere la stringa nginx-target-8694bdffbf-66t8l
+
+    #migrazione dei dati
+    - name: Copia i file dal vecchio sito al container
+      kubernetes.core.k8s_cp: #questo modulo sostituisce rsync. Fa la copia fisica dentro il container
+        namespace: default
+        pod: "{{ pod_name }}" #usiamo la variabile calcolata prima e gli diciamo copia dentro quel Pod
+        local_path: "{{ item }}" #file sorgente. {{ item }} è l'elemento corrente del ciclo "with_fileglob". Ansible ripterà questo comando per ogni file che trova
+        remote_path: "{{ pod_dest }}" #inserisci i file trovati nella destinazione, in questo caso "/usr/share/nginx/html/" che abbiamo definito nelle vars
+      with_fileglob: #questo crea un loop per ogni file presente nella cartella src 
+        - "{{ local_source }}/*" 
+
+    #conferma
+    - name: Stampa messaggio finale
+      debug: #serve a stampare scritte nel terminale che ci confermano che siamo arrivati in fondo senza errori
+        msg: "Migrazione completata sul Pod {{ pod_name }}!"
