@@ -1,5 +1,5 @@
 apiVersion: v1
-kind: PersistentVolumeClaim #chiede a kubernetes di dare un pezo sul disco
+kind: PersistentVolumeClaim #chiede a kubernetes di dare un pezzo sul disco
 metadata:
   name: migration-pvc #nome prenotazione. useremo questo nome per collegarlo al Pod
   namespace: default
@@ -19,7 +19,7 @@ metadata:
 spec:
   replicas: 1
   selector: #crea l'etichetta e serve a Kubernetes per capire quali pod appartengono a questo Deployment. Cercherà quelli con l'etichetta "nginx-target"
-    matchLabels: 
+    matchLabels:
       app: nginx-target
   template: #qui descriviamo il container
     metadata:

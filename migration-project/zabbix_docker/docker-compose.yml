@@ -11,7 +11,7 @@ services: #inizio lista di container
       - MYSQL_PASSWORD=zabbix_pwd #la password per l'utente zabbix
       - MYSQL_ROOT_PASSWORD=root_pwd #la password per l'amministratore root del db
     volumes: #per il salvataggio dei dati
-      - ./zabbix_db_data:/var/lib/mysql #.7zabbix_db_data= crea il ponte. tutto quello che il container scrive nella cartella interna /var/lib/mysql viene copiato in tempo reale nella cartella ./zabbix_db_data sul pc
+      - ./zabbix_db_data:/var/lib/mysql #./zabbix_db_data= crea il ponte. tutto quello che il container scrive nella cartella interna /var/lib/mysql viene copiato in tempo reale nella cartella ./zabbix_db_data sul pc
 
   #il server
   zabbix-server: #nome del servizio

@@ -3,7 +3,7 @@
   hosts: localhost #dice ad ansible di non collegarsi a server remoti e di eseguire questo script direttamente sul comptuer dove si trova, in questo caso il mio pc
   connection: local #usa i comandi locali
   gather_facts: no #non cerca info sul sistema (IP, memoria, OS)
-  vars: #difiniamo i percorsi sorgente e destinazione
+  vars: #definiamo i percorsi sorgente e destinazione
     local_source: "../sito_vecchio/" #percorso dove prendiamo i file
     pod_dest: "/usr/share/nginx/html/" #questa è la cartella interna al container Nginx dove vanno i file
 
